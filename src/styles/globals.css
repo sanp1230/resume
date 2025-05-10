@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-white text-gray-900;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-white/80 backdrop-blur-xl border border-gray-100 rounded-3xl;
+  }
+
+  .nav-link {
+    @apply text-sm text-gray-600 hover:text-gray-900 transition-colors;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center rounded-full font-medium transition-colors;
+  }
+
+  .btn-primary {
+    @apply bg-black text-white hover:bg-gray-900;
+  }
+
+  .btn-lg {
+    @apply px-8 py-4 text-base;
+  }
+
+  .feature-icon {
+    @apply h-8 w-8 text-gray-900;
+  }
+
+  .feature-title {
+    @apply text-[22px] font-semibold text-gray-900;
+  }
+
+  .feature-description {
+    @apply text-base text-gray-600;
+  }
+}
+
+/* Custom Animations */
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Custom Shadows */
+.shadow-feature {
+  box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.04);
+}
+
+.shadow-feature-hover {
+  box-shadow: 0 4px 32px -1px rgba(0, 0, 0, 0.08);
+}
+
+/* Inter Font Optimizations */
+.font-inter {
+  font-feature-settings: 'salt' on, 'ss01' on, 'ss02' on, 'ss03' on;
+} 
