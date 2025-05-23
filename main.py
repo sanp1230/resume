@@ -14,8 +14,10 @@ import pandas as pd
 import os
 import random
 
-# OpenRouter API Configuration
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") or "sk-xxx"  # Replace with your key
+# Cohere API Configuration
+COHERE_API_KEY = "uEbr2Attpr6bXmTwZiVKptJP6qSLORO01tqStpay"
+COHERE_ENDPOINT = "https://api.cohere.ai/v1/generate"
+
 # YouTube API Configuration
 YOUTUBE_API_KEY = "AIzaSyAjcV8VSA7Y4nt8DY2zPkTH_joLfX5wt90"
 YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
@@ -670,34 +672,77 @@ with tab4:
             return uploaded_file.getvalue().decode("utf-8")
         return ""
 
+    def getAISuggestion(prompt, system_prompt=None):
+        try:
+            # Combine system prompt and user prompt if system prompt is provided
+            full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+            
+            headers = {
+                "Authorization": f"Bearer {COHERE_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "model": "command-r-plus",
+                "prompt": full_prompt,
+                "max_tokens": 500,  # Increased token limit for better responses
+                "temperature": 0.7,
+                "k": 0,
+                "stop_sequences": ["--"],
+                "return_likelihoods": "NONE"
+            }
+            
+            response = requests.post(COHERE_ENDPOINT, headers=headers, json=data)
+            response.raise_for_status()  # Raise an exception for bad status codes
+            
+            result = response.json()
+            if "generations" in result and len(result["generations"]) > 0:
+                return result["generations"][0]["text"].strip()
+            else:
+                st.error("No response generated from the AI model.")
+                return "⚠️ Unable to generate a response. Please try again."
+            
+        except requests.exceptions.RequestException as e:
+            st.error(f"API Request Error: {str(e)}")
+            return "⚠️ API request failed. Please check your internet connection and try again."
+        except Exception as e:
+            st.error(f"Unexpected Error: {str(e)}")
+            return "⚠️ An unexpected error occurred. Please try again later."
+
     def get_rewrite_and_skills(resume, role):
-        prompt = f"""
-You are an expert resume advisor.
+        prompt = f"Analyze this resume and suggest improvements for a {role} position:\n\n{resume}"
+        system_prompt = "You are a professional resume reviewer. Provide specific, actionable suggestions to improve the resume."
+        return getAISuggestion(prompt, system_prompt)
 
-The user wants to apply for the role of a **{role}**. Their current resume is below:
+    def get_keyword_gaps(resume_text, job_text):
+        prompt = f"Compare this resume:\n\n{resume_text}\n\nWith this job description:\n\n{job_text}\n\nIdentify missing keywords and skills."
+        system_prompt = "You are a resume optimization expert. Analyze the gaps between the resume and job requirements."
+        return getAISuggestion(prompt, system_prompt)
 
---- RESUME ---
-{resume}
----------------
+    def get_career_fit(resume_text):
+        prompt = f"Analyze this resume and suggest the best career paths:\n\n{resume_text}"
+        system_prompt = "You are a career advisor helping students decide their career path."
+        return getAISuggestion(prompt, system_prompt)
 
-1. List important skills required for a {role}.
-2. Then compare and find missing or weak skills in this resume.
-3. Finally, rewrite the resume using clear, powerful language, and include important keywords to beat ATS.
-"""
+    def get_learning_plan(resume_text, career_goal):
+        prompt = f"Create a learning plan for this resume:\n\n{resume_text}\n\nTo achieve this career goal: {career_goal}"
+        system_prompt = "You are a career development expert. Create a structured learning plan."
+        return getAISuggestion(prompt, system_prompt)
 
-        data = {
-            "model": "mistralai/mistral-7b-instruct",
-            "messages": [{"role": "user", "content": prompt}]
-        }
+    def generate_tailored_resume(resume_text, target_company_role):
+        prompt = f"Tailor this resume:\n\n{resume_text}\n\nFor this position: {target_company_role}"
+        system_prompt = "You are a resume expert helping tailor resumes for job applications."
+        return getAISuggestion(prompt, system_prompt)
 
-        headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json"
-        }
+    def generate_custom_resume(resume_text, job_role, company, region):
+        prompt = f"Customize this resume:\n\n{resume_text}\n\nFor {job_role} at {company} in {region}"
+        system_prompt = "You are a resume expert helping tailor resumes for job applications."
+        return getAISuggestion(prompt, system_prompt)
 
-        response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data)
-        reply = response.json()
-        return reply['choices'][0]['message']['content']
+    def analyze_resume(resume_text, job_title):
+        prompt = f"Analyze this resume for a {job_title} position:\n\n{resume_text}"
+        system_prompt = "You are a resume analysis expert."
+        return getAISuggestion(prompt, system_prompt)
 
     if st.button("✨ Rewrite My Resume", key="rewrite_resume_button"):
         if (uploaded_file is not None or resume_text) and target_role:
@@ -731,39 +776,9 @@ with tab5:
 
     # --- Get Keyword Gaps from LLM ---
     def get_keyword_gaps(resume_text, job_text):
-        prompt = f"""
-Compare this resume and job description.
-Extract the top 15 important keywords from the job description.
-Then show me which of these are missing in the resume.
-Split them into:
-- Must Have Skills
-- Optional/Nice to Have Skills
-
-Resume:
-{resume_text}
-
-Job Description:
-{job_text}
-"""
-
-        # Define headers for the API request
-        api_headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json"
-        }
-
-        body = {
-            "model": "mistralai/mistral-7b-instruct",
-            "messages": [
-                {"role": "user", "content": prompt}
-            ]
-        }
-
-        response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=api_headers, json=body)
-        if response.status_code == 200:
-            return response.json()["choices"][0]["message"]["content"]
-        else:
-            return f"Error: {response.status_code} - {response.text}"
+        prompt = f"Compare this resume:\n\n{resume_text}\n\nWith this job description:\n\n{job_text}\n\nIdentify missing keywords and skills."
+        system_prompt = "You are a resume optimization expert. Analyze the gaps between the resume and job requirements."
+        return getAISuggestion(prompt, system_prompt)
 
     # --- Main Logic ---
     # Always show the analyze button
@@ -859,20 +874,21 @@ Job Description:
 
         # Define headers for the API request
         api_headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Authorization": f"Bearer {COHERE_API_KEY}",
             "Content-Type": "application/json"
         }
 
         body = {
-            "model": "mistralai/mistral-7b-instruct",
-            "messages": [
-                {"role": "user", "content": prompt}
-            ]
+            "model": "command-r-plus",
+            "prompt": prompt,
+            "max_tokens": 300,
+            "temperature": 0.7,
+            "stop_sequences": ["--"]
         }
 
-        response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=api_headers, json=body)
+        response = requests.post(COHERE_ENDPOINT, headers=api_headers, json=body)
         if response.status_code == 200:
-            return response.json()["choices"][0]["message"]["content"].strip()
+            return response.json()["generations"][0]["text"].strip()
         else:
             return f"Error: {response.status_code} - {response.text}"
 
@@ -942,33 +958,9 @@ with tab7:
 
     # --- Get Career Fit from LLM ---
     def get_career_fit(resume_text):
-        prompt = f"""
-Based on the following resume, suggest 3 to 5 career paths the person is best suited for.
-Also explain why for each suggestion.
-
-Resume:
-{resume_text}
-"""
-
-        # Define headers for the API request
-        api_headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json"
-        }
-
-        body = {
-            "model": "mistralai/mistral-7b-instruct",
-            "messages": [
-                {"role": "system", "content": "You are a career advisor helping students decide their career path."},
-                {"role": "user", "content": prompt}
-            ]
-        }
-
-        response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=api_headers, json=body)
-        if response.status_code == 200:
-            return response.json()["choices"][0]["message"]["content"]
-        else:
-            return f"Error: {response.status_code} - {response.text}"
+        prompt = f"Analyze this resume and suggest the best career paths:\n\n{resume_text}"
+        system_prompt = "You are a career advisor helping students decide their career path."
+        return getAISuggestion(prompt, system_prompt)
 
     # --- Main Logic ---
     if st.button("🔍 Suggest Career Paths", key="suggest_career_paths_button") and st.session_state.career_fit_resume_text:
@@ -1009,43 +1001,9 @@ with tab8:
 
     # --- Get Learning Plan from LLM ---
     def get_learning_plan(resume_text, career_goal):
-        prompt = f"""
-You are a career roadmap coach.
-
-Based on the resume below and the user's goal of becoming a '{career_goal}', give a complete, realistic roadmap to reach that goal.
-
-Your roadmap should include:
-- A list of major skills and tools to learn, in order
-- At least 3 beginner → intermediate → advanced project ideas
-- Best websites or platforms to learn (free if possible)
-- YouTube playlist or channel suggestions for each skill
-- Advice on certifications if useful
-- Time estimation for each phase
-- Job titles the person can apply for after learning
-
-Keep it clear and actionable.
-
-Resume: {resume_text}
-"""
-
-        # Define headers for the API request
-        api_headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json"
-        }
-
-        body = {
-            "model": "mistralai/mistral-7b-instruct",
-            "messages": [
-                {"role": "user", "content": prompt}
-            ]
-        }
-
-        response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=api_headers, json=body)
-        if response.status_code == 200:
-            return response.json()["choices"][0]["message"]["content"]
-        else:
-            return f"Error: {response.status_code} - {response.text}"
+        prompt = f"Create a learning plan for this resume:\n\n{resume_text}\n\nTo achieve this career goal: {career_goal}"
+        system_prompt = "You are a career development expert. Create a structured learning plan."
+        return getAISuggestion(prompt, system_prompt)
 
     # --- Main Logic ---
     if st.button("🔍 Generate Learning Plan", key="generate_learning_plan_button"):
@@ -1130,23 +1088,23 @@ User Question: {user_input}
 
             # Define headers for the API request
             api_headers = {
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Authorization": f"Bearer {COHERE_API_KEY}",
                 "Content-Type": "application/json"
             }
 
             body = {
-                "model": "mistralai/mistral-7b-instruct",
-                "messages": [
-                    {"role": "system", "content": "You are a helpful and professional resume review coach."},
-                    {"role": "user", "content": prompt}
-                ]
+                "model": "command-r-plus",
+                "prompt": prompt,
+                "max_tokens": 300,
+                "temperature": 0.7,
+                "stop_sequences": ["--"]
             }
 
             with st.spinner("Thinking..."):
                 try:
-                    response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=api_headers, json=body)
+                    response = requests.post(COHERE_ENDPOINT, headers=api_headers, json=body)
                     if response.status_code == 200:
-                        reply = response.json()["choices"][0]["message"]["content"]
+                        reply = response.json()["generations"][0]["text"].strip()
                         st.session_state.chat_history.append((user_input, reply))
                         # Force a rerun to update the chat display with the new message
                         st.rerun()
@@ -1172,33 +1130,9 @@ with tab10:
 
     # --- Generate Tailored Resume ---
     def generate_tailored_resume(resume_text, target_company_role):
-        prompt = f"""
-You are an expert resume editor. Rewrite the resume below to target a job at {target_company_role}.
-Make sure to improve the formatting, wording, and include relevant keywords.
-
-Resume:
-{resume_text}
-"""
-
-        # Define headers for the API request
-        api_headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json"
-        }
-
-        body = {
-            "model": "mistralai/mistral-7b-instruct",
-            "messages": [
-                {"role": "system", "content": "You are a resume expert helping tailor resumes for job applications."},
-                {"role": "user", "content": prompt}
-            ]
-        }
-
-        response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=api_headers, json=body)
-        if response.status_code == 200:
-            return response.json()["choices"][0]["message"]["content"]
-        else:
-            return f"Error: {response.status_code} - {response.text}"
+        prompt = f"Tailor this resume:\n\n{resume_text}\n\nFor this position: {target_company_role}"
+        system_prompt = "You are a resume expert helping tailor resumes for job applications."
+        return getAISuggestion(prompt, system_prompt)
 
     # --- Main Logic ---
     if st.button("✨ Generate Custom Resume", key="generate_custom_resume_button"):
@@ -1335,33 +1269,9 @@ with tab12:
 
     # --- Generate Custom Resume Function ---
     def generate_custom_resume(resume_text, job_role, company, region):
-        prompt = f"""
-Rewrite this resume for a job role as {job_role} at {company} in {region}.
-Make it tailored with the right keywords, skills, and tone suited to the job and company culture.
-Use bullet points and clear formatting. Here's the original:
-
-{resume_text}
-"""
-
-        # Define headers for the API request
-        api_headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json"
-        }
-
-        body = {
-            "model": "mistralai/mistral-7b-instruct",
-            "messages": [
-                {"role": "system", "content": "You are a resume expert helping tailor resumes for job applications."},
-                {"role": "user", "content": prompt}
-            ]
-        }
-
-        response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=api_headers, json=body)
-        if response.status_code == 200:
-            return response.json()["choices"][0]["message"]["content"]
-        else:
-            return f"Error: {response.status_code} - {response.text}"
+        prompt = f"Customize this resume:\n\n{resume_text}\n\nFor {job_role} at {company} in {region}"
+        system_prompt = "You are a resume expert helping tailor resumes for job applications."
+        return getAISuggestion(prompt, system_prompt)
 
     # --- Main Logic ---
     if st.button("🚀 Generate Custom Resume", key="generate_multi_version_resume_button"):
@@ -1425,34 +1335,9 @@ with tab13:
     
     # Function to analyze resume against job title
     def analyze_resume(resume_text, job_title):
-        prompt = f"""
-Analyze the following resume for the job title: {job_title}.
-Give an ATS match score out of 100, list missing important skills or keywords,
-and briefly mention strengths and weaknesses.
-
-Resume:
-{resume_text}
-"""
-
-        # Define headers for the API request
-        api_headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json"
-        }
-
-        body = {
-            "model": "mistralai/mistral-7b-instruct",
-            "messages": [
-                {"role": "system", "content": "You are a resume analysis expert."},
-                {"role": "user", "content": prompt}
-            ]
-        }
-
-        response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=api_headers, json=body)
-        if response.status_code == 200:
-            return response.json()["choices"][0]["message"]["content"]
-        else:
-            return f"Error: {response.status_code} - {response.text}"
+        prompt = f"Analyze this resume for a {job_title} position:\n\n{resume_text}"
+        system_prompt = "You are a resume analysis expert."
+        return getAISuggestion(prompt, system_prompt)
     
     # Function to extract score from analysis result
     def extract_score(content):
